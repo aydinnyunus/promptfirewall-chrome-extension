@@ -2685,10 +2685,18 @@ async function startBlockStatus() {
 startBlockStatus();
 
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    // Sender doğrulaması - sadece extension'dan gelen mesajları kabul et
+    if (!sender || !sender.id || sender.id !== chrome.runtime.id) {
+        debug("Unauthorized message sender", sender);
+        return false;
+    }
+    
     if (message.action === "reloadPage") {
         debug("location reload", null);
         location.reload();
     }
+    
+    return true; // Async response için
 });
 
 
@@ -2724,22 +2732,82 @@ function startInterval() {
 
         let textarea;
 
-        const promptTextarea = document.querySelector("#prompt-textarea"); //chatgpt
+        // ChatGPT selectors (multiple versions)
+        const promptTextarea = document.querySelector("#prompt-textarea"); //chatgpt old
         const chatInput = document.querySelector("#chat-input"); //deepseek
+        const newChatGPTInput = document.querySelector('textarea[data-id="root"]'); //chatgpt new
+        const chatGPTTextarea = document.querySelector('textarea[placeholder*="Message"]'); //chatgpt alternative
+        const contentEditableDiv = document.querySelector('div[contenteditable="true"]'); //chatgpt contenteditable
+        const proseMirrorDiv = document.querySelector('div.ProseMirror[contenteditable="true"]'); //chatgpt prosemirror
+        const proseMirrorWithId = document.querySelector('#prompt-textarea.ProseMirror[contenteditable="true"]'); //chatgpt prosemirror with id
+        
+        debug("Checking selectors:", {
+            promptTextarea: !!promptTextarea,
+            chatInput: !!chatInput,
+            newChatGPTInput: !!newChatGPTInput,
+            chatGPTTextarea: !!chatGPTTextarea,
+            contentEditableDiv: !!contentEditableDiv,
+            proseMirrorDiv: !!proseMirrorDiv,
+            proseMirrorWithId: !!proseMirrorWithId
+        });
 
         if (chatInput && chatInput.value.trim()) {
           textarea = chatInput; 
+          debug("Using DeepSeek selector", null);
+        } else if (proseMirrorWithId) {
+          textarea = proseMirrorWithId;
+          debug("Using ProseMirror with ID selector", null);
+        } else if (proseMirrorDiv) {
+          textarea = proseMirrorDiv;
+          debug("Using ProseMirror selector", null);
+        } else if (newChatGPTInput) {
+          textarea = newChatGPTInput;
+          debug("Using new ChatGPT selector", null);
+        } else if (chatGPTTextarea) {
+          textarea = chatGPTTextarea;
+          debug("Using ChatGPT textarea selector", null);
         } else if (promptTextarea) {
-          textarea = promptTextarea; 
+          textarea = promptTextarea;
+          debug("Using old ChatGPT selector", null);
+        } else if (contentEditableDiv) {
+          textarea = contentEditableDiv;
+          debug("Using ChatGPT contenteditable selector", null);
         }
 
 
         if (textarea) {  
+            
+            // ProseMirror için ek event'ler
+            const eventTypes = textarea.classList && textarea.classList.contains('ProseMirror') 
+                ? ['input', 'paste', 'keyup', 'DOMSubtreeModified', 'DOMCharacterDataModified']
+                : ['input', 'paste'];
+            
+            debug("Using event types:", eventTypes);
         
-            ['input', 'paste'].forEach(eventtype => {
+            eventTypes.forEach(eventtype => {
             textarea.addEventListener(eventtype, debounce(async (event) => {
                 let lastPart = "";
-                let fullTextContent = textarea.textContent;
+                let fullTextContent = "";
+                
+                // Get text content based on element type
+                if (textarea.tagName === 'TEXTAREA' || textarea.tagName === 'INPUT') {
+                    fullTextContent = textarea.value;
+                } else if (textarea.classList && textarea.classList.contains('ProseMirror')) {
+                    // ProseMirror editor - extract text from paragraphs
+                    const paragraphs = textarea.querySelectorAll('p');
+                    if (paragraphs.length > 0) {
+                        fullTextContent = Array.from(paragraphs).map(p => p.textContent).join(' ');
+                    } else {
+                        fullTextContent = textarea.textContent || textarea.innerText;
+                    }
+                    debug("ProseMirror text extracted:", fullTextContent);
+                } else if (textarea.contentEditable === 'true') {
+                    fullTextContent = textarea.textContent || textarea.innerText;
+                } else {
+                    fullTextContent = textarea.textContent;
+                }
+                
+                debug("Full text content:", fullTextContent);
                 lastPart = fullTextContent;
 
                 if (eventtype === 'input' && event.inputType !== 'insertFromPaste') {
@@ -3539,7 +3607,46 @@ function startInterval() {
 
             }, 300)); // 300 ms debounce delay
             }); //debounce input paste event
-
+            
+            // ProseMirror için MutationObserver ekle
+            if (textarea.classList && textarea.classList.contains('ProseMirror')) {
+                const proseMirrorObserver = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                            debug("ProseMirror mutation detected", mutation.type);
+                            
+                            // Metin içeriğini kontrol et
+                            const paragraphs = textarea.querySelectorAll('p');
+                            if (paragraphs.length > 0) {
+                                const fullTextContent = Array.from(paragraphs).map(p => p.textContent).join(' ');
+                                debug("ProseMirror mutation text:", fullTextContent);
+                                
+                                // Email kontrolü yap
+                                if (fullTextContent && fullTextContent.includes('@')) {
+                                    const emailMatches = fullTextContent.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g);
+                                    if (emailMatches) {
+                                        debug("Email detected via MutationObserver:", emailMatches);
+                                        // Email tespit edildi, sayacı artır
+                                        try {
+                                            sendDataWithRetry();
+                                        } catch (error) {
+                                            console.error('Error sending data:', error);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                proseMirrorObserver.observe(textarea, {
+                    childList: true,
+                    subtree: true,
+                    characterData: true
+                });
+                
+                debug("ProseMirror MutationObserver attached", null);
+            }
 
         } else {
 
@@ -3547,7 +3654,7 @@ function startInterval() {
             textarea = document.querySelector("#prompt-textarea");
         }
 
-    }, 4000); //intervalId end
+    }, 2000); //intervalId end - reduced for better detection
 
 }
 //end
