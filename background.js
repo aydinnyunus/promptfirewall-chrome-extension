@@ -243,6 +243,27 @@ function fetchDataFromDatabase(callback) {
 }
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+  
+  // Sender doğrulaması - sadece extension'ın kendi tab'larından gelen mesajları kabul et
+  if (!sender || !sender.tab) {
+    debug("Unauthorized message sender", sender);
+    sendResponse({ message: "Unauthorized sender" });
+    return false;
+  }
+  
+  // Sadece izin verilen URL'lerden gelen mesajları kabul et
+  const allowedOrigins = [
+    'https://chat.openai.com',
+    'https://chatgpt.com', 
+    'https://chat.deepseek.com'
+  ];
+  
+  const senderOrigin = new URL(sender.tab.url).origin;
+  if (!allowedOrigins.includes(senderOrigin)) {
+    debug("Unauthorized origin", senderOrigin);
+    sendResponse({ message: "Unauthorized origin" });
+    return false;
+  }
 
   try {
     if (request.action === "addData") {
