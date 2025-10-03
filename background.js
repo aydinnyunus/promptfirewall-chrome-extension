@@ -1,6 +1,12 @@
 const DEBUG_MODE = false;
 
-function debug(label, data) {}
+function debug(label, data) {
+  if (DEBUG_MODE) {
+    console.group(`DEBUG: ${label}`);
+    console.log(data);
+    console.groupEnd();
+  }
+}
 
 debug("initDatabase", null);
 
