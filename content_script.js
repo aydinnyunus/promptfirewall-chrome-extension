@@ -9,11 +9,6 @@ const usedWords = new Set();
 const DEBUG_MODE = false;
 
 function debug(label, data) {
-    if (DEBUG_MODE) {
-        console.group(`DEBUG: ${label}`);
-        console.log(data);
-        console.groupEnd();
-    }
 }
 
 window.onload = function() {
@@ -2732,56 +2727,21 @@ function startInterval() {
 
         let textarea;
 
-        // ChatGPT selectors (multiple versions)
-        const promptTextarea = document.querySelector("#prompt-textarea"); //chatgpt old
-        const chatInput = document.querySelector("#chat-input"); //deepseek
-        const newChatGPTInput = document.querySelector('textarea[data-id="root"]'); //chatgpt new
-        const chatGPTTextarea = document.querySelector('textarea[placeholder*="Message"]'); //chatgpt alternative
-        const contentEditableDiv = document.querySelector('div[contenteditable="true"]'); //chatgpt contenteditable
-        const proseMirrorDiv = document.querySelector('div.ProseMirror[contenteditable="true"]'); //chatgpt prosemirror
-        const proseMirrorWithId = document.querySelector('#prompt-textarea.ProseMirror[contenteditable="true"]'); //chatgpt prosemirror with id
+        // Sadece ProseMirror ChatGPT selector'ı
+        const proseMirrorTextarea = document.querySelector('div.ProseMirror#prompt-textarea[contenteditable="true"]');
         
-        debug("Checking selectors:", {
-            promptTextarea: !!promptTextarea,
-            chatInput: !!chatInput,
-            newChatGPTInput: !!newChatGPTInput,
-            chatGPTTextarea: !!chatGPTTextarea,
-            contentEditableDiv: !!contentEditableDiv,
-            proseMirrorDiv: !!proseMirrorDiv,
-            proseMirrorWithId: !!proseMirrorWithId
-        });
+        debug("Checking ProseMirror selector:", !!proseMirrorTextarea);
 
-        if (chatInput && chatInput.value.trim()) {
-          textarea = chatInput; 
-          debug("Using DeepSeek selector", null);
-        } else if (proseMirrorWithId) {
-          textarea = proseMirrorWithId;
-          debug("Using ProseMirror with ID selector", null);
-        } else if (proseMirrorDiv) {
-          textarea = proseMirrorDiv;
-          debug("Using ProseMirror selector", null);
-        } else if (newChatGPTInput) {
-          textarea = newChatGPTInput;
-          debug("Using new ChatGPT selector", null);
-        } else if (chatGPTTextarea) {
-          textarea = chatGPTTextarea;
-          debug("Using ChatGPT textarea selector", null);
-        } else if (promptTextarea) {
-          textarea = promptTextarea;
-          debug("Using old ChatGPT selector", null);
-        } else if (contentEditableDiv) {
-          textarea = contentEditableDiv;
-          debug("Using ChatGPT contenteditable selector", null);
+        if (proseMirrorTextarea) {
+          textarea = proseMirrorTextarea;
+          debug("Using ProseMirror ChatGPT selector", null);
         }
 
 
         if (textarea) {  
             
-            // ProseMirror için ek event'ler
-            const eventTypes = textarea.classList && textarea.classList.contains('ProseMirror') 
-                ? ['input', 'paste', 'keyup', 'DOMSubtreeModified', 'DOMCharacterDataModified']
-                : ['input', 'paste'];
-            
+            // ProseMirror için event'ler
+            const eventTypes = ['input', 'paste', 'keyup'];
             debug("Using event types:", eventTypes);
         
             eventTypes.forEach(eventtype => {
@@ -2789,23 +2749,14 @@ function startInterval() {
                 let lastPart = "";
                 let fullTextContent = "";
                 
-                // Get text content based on element type
-                if (textarea.tagName === 'TEXTAREA' || textarea.tagName === 'INPUT') {
-                    fullTextContent = textarea.value;
-                } else if (textarea.classList && textarea.classList.contains('ProseMirror')) {
-                    // ProseMirror editor - extract text from paragraphs
-                    const paragraphs = textarea.querySelectorAll('p');
-                    if (paragraphs.length > 0) {
-                        fullTextContent = Array.from(paragraphs).map(p => p.textContent).join(' ');
-                    } else {
-                        fullTextContent = textarea.textContent || textarea.innerText;
-                    }
-                    debug("ProseMirror text extracted:", fullTextContent);
-                } else if (textarea.contentEditable === 'true') {
-                    fullTextContent = textarea.textContent || textarea.innerText;
+                // ProseMirror'dan metin çıkarma
+                const paragraphs = textarea.querySelectorAll('p');
+                if (paragraphs.length > 0) {
+                    fullTextContent = Array.from(paragraphs).map(p => p.textContent).join(' ');
                 } else {
-                    fullTextContent = textarea.textContent;
+                    fullTextContent = textarea.textContent || textarea.innerText;
                 }
+                debug("ProseMirror text extracted:", fullTextContent);
                 
                 debug("Full text content:", fullTextContent);
                 lastPart = fullTextContent;
@@ -3608,50 +3559,9 @@ function startInterval() {
             }, 300)); // 300 ms debounce delay
             }); //debounce input paste event
             
-            // ProseMirror için MutationObserver ekle
-            if (textarea.classList && textarea.classList.contains('ProseMirror')) {
-                const proseMirrorObserver = new MutationObserver(function(mutations) {
-                    mutations.forEach(function(mutation) {
-                        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-                            debug("ProseMirror mutation detected", mutation.type);
-                            
-                            // Metin içeriğini kontrol et
-                            const paragraphs = textarea.querySelectorAll('p');
-                            if (paragraphs.length > 0) {
-                                const fullTextContent = Array.from(paragraphs).map(p => p.textContent).join(' ');
-                                debug("ProseMirror mutation text:", fullTextContent);
-                                
-                                // Email kontrolü yap
-                                if (fullTextContent && fullTextContent.includes('@')) {
-                                    const emailMatches = fullTextContent.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g);
-                                    if (emailMatches) {
-                                        debug("Email detected via MutationObserver:", emailMatches);
-                                        // Email tespit edildi, sayacı artır
-                                        try {
-                                            sendDataWithRetry();
-                                        } catch (error) {
-                                            console.error('Error sending data:', error);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                });
-                
-                proseMirrorObserver.observe(textarea, {
-                    childList: true,
-                    subtree: true,
-                    characterData: true
-                });
-                
-                debug("ProseMirror MutationObserver attached", null);
-            }
 
         } else {
-
-            debug("Textarea not found", null);
-            textarea = document.querySelector("#prompt-textarea");
+            debug("ProseMirror textarea not found", null);
         }
 
     }, 2000); //intervalId end - reduced for better detection
