@@ -2,10 +2,7 @@
   "name": "Prompt Firewall: LLM Data Leak Prevention",
   "description": "LLM Data Leak Prevention (DLP) : Safeguard Sensitive Information and Protect Your Privacy",
   "version": "0.0.17",
-  "permissions": [
-    "storage",
-    "activeTab"
-  ],
+  "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://chat.openai.com/*",
     "https://chatgpt.com/*",
@@ -28,12 +25,8 @@
         "https://chatgpt.com/*",
         "https://chat.deepseek.com/*"
       ],
-      "js": [
-        "content_script.js"
-      ],
-      "css": [
-        "style.css"
-      ],
+      "js": ["content_script.js"],
+      "css": ["style.css"],
       "run_at": "document_end"
     }
   ],
@@ -44,9 +37,7 @@
         "https://chatgpt.com/*",
         "https://chat.deepseek.com/*"
       ],
-      "resources": [
-        "style.css"
-      ]
+      "resources": ["style.css"]
     }
   ]
 }
